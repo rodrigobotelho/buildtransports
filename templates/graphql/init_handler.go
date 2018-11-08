@@ -10,7 +10,7 @@ func initGraphqlHandler(svc service.ExampleService, g *group.Group) {
 	)
 	mux := http1.NewServeMux()
 
-	mux.Handle("/graphql", graphqlHandler.Handler())
+	mux.Handle(service.PathPrefix + "/graphql", graphqlHandler.Handler())
 	httplistener, err := net.Listen("tcp", *graphqlAddr)
 	if err != nil {
 		logger.Log("transport", "http", "during", "listen", "err", err)

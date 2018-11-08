@@ -85,8 +85,20 @@ fi
 
 SERV=$1
 
+SERVICE=${SERV}/cmd/service/service.go
+SERVNAME="$(tr '[:lower:]' '[:upper:]' <<< ${SERV:0:1})${SERV:1}"
+HANDLER=${SERV}/pkg/apis/graphql/handler.go
+HANDLER_TST=${SERV}/pkg/apis/graphql/handler_test.go
+RESOLVER=${SERV}/pkg/apis/graphql/resolver.go
+SCHEMA=${SERV}/pkg/apis/graphql/schema.graphql
+HTTP_HANDLER=${SERV}/pkg/http/handler.go
+PACKAGE=/src
+
 if verifica_existencia_servico ${SERV} -eq 0 ; then
     kit n s ${SERV}
+    #Coloca o pathprefix
+    echo "//PathPrefix Prefixo do caminho do servico">> ${SERV}/pkg/service/service.go
+    echo "const PathPrefix=\"\"" >> ${SERV}/pkg/service/service.go
     echo "Adicione os métodos que serão utilizados no serviço: pkg/service/service.go"
     find ${SERV} |grep -v .git
     exit 1
@@ -139,6 +151,13 @@ while [ "X${TRANSPORT_DONE}" != "Xn" ] ; do
         kit g s ${SERV} ${TRANSP} ${METHODS}
         echo "kit g c ${SERV} ${TRANSP}"
         kit g c ${SERV} ${TRANSP}
+        #Atualiza PathPrefix do http
+        DEVE_ATUALIZAR=`cat ${HTTP_HANDLER} |grep "PathPrefix"`
+        if [ "X${DEVE_ATUALIZAR}" == "X" ]; then
+            cat ${HTTP_HANDLER} | sed 's/\(\"\/.*\"\)/service.PathPrefix + &/g' > ${HTTP_HANDLER}_tmp
+            mv ${HTTP_HANDLER}_tmp ${HTTP_HANDLER}
+            goimports -w  ${HTTP_HANDLER}
+        fi
 
     fi
 
