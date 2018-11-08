@@ -13,6 +13,11 @@ echo "É preciso ter o protoc instalado no seu linux"
 cp adiciona_transport.sh ${HOME}/go/bin/.
 mkdir -p ${HOME}/go/src/github.com/rodrigobotelho/buildtransports
 cp -r templates/* ${HOME}/go/src/github.com/rodrigobotelho/buildtransports/.
-cat ${HOME}/go/bin/adiciona_transport.sh|sed 's/PACKAGE=.*/PACKAGE=${HOME}\/go\/src\/github.com\/rodrigobotelho\/buildtransports/g'
+
+RUN=${HOME}/go/bin/adiciona_transport.sh
+cat ${RUN} |sed 's/PACKAGE=.*/PACKAGE=${HOME}\/go\/src\/github.com\/rodrigobotelho\/buildtransports\/templates/g' > ${RUN}_tmp
+mv ${RUN}_tmp ${RUN}
+
+chmod 755 ${RUN}
 
 echo "Pronto!"
