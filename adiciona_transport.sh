@@ -43,23 +43,57 @@ verifica_service() {
     verifica_module "service" "service.go"
 }
 
+verifica_apisgrpc () {
+    verifica_module "apis/grpc" "handler.go"
+}
+
+verifica_apishttp () {
+    verifica_module "apis/http" "handler.go"
+}
+
+verifica_apisendpoint () {
+    verifica_module "apis/endpoint" "endpoint.go"
+}
+
+verifica_apisservice() {
+    verifica_module "apis/service" "service.go"
+}
+
 move_module () {
     MODULE=$1
-    
+
     mv pkg/${MODULE} pkg/apis/${MODULE}
     gomove pkg/${MODULE} pkg/apis/${MODULE}
+}
+
+move_back_module () {
+    MODULE=$1
+
+    mv pkg/apis/${MODULE} pkg/${MODULE}
+    gomove pkg/apis/${MODULE} pkg/${MODULE}
 }
 
 move_service () {
     verifica_service 
     if [ "$?" -eq 1 ] ; then
         move_module "service"
+    else
+        verifica_apisservice
+        if [ "$?" -eq 1 ] ; then
+            move_back_module "service"
+        fi
     fi
 }
+
 move_grpc () {
     verifica_grpc
     if [ "$?" -eq 1 ] ; then
         move_module "grpc"
+    else
+        verifica_apisgrpc
+        if [ "$?" -eq 1 ] ; then
+            move_back_module "grpc"
+        fi
     fi
 }
 
@@ -67,6 +101,11 @@ move_http () {
     verifica_http
     if [ "$?" -eq 1 ] ; then
         move_module "http"
+    else
+        verifica_apishttp
+        if [ "$?" -eq 1 ] ; then
+            move_back_module "http"
+        fi
     fi
 }
 
@@ -74,7 +113,23 @@ move_endpoint () {
     verifica_endpoint
     if [ "$?" -eq 1 ] ; then
         move_module "endpoint"
+    else
+        verifica_apisendpoint
+        if [ "$?" -eq 1 ] ; then
+            move_back_module "endpoint"
+        fi
     fi
+}
+
+corrige_pastas () {
+    cd ${SERV}
+    if [ -d pkg/apis ] ; then
+        move_service
+        move_grpc
+        move_http
+        move_endpoint
+    fi
+    cd -
 }
 
 if [ "$#" -ne 1 ] ; then 
@@ -104,13 +159,7 @@ if verifica_existencia_servico ${SERV} -eq 0 ; then
     exit 1
 fi
 
-SERVNAME="$(tr '[:lower:]' '[:upper:]' <<< ${SERV:0:1})${SERV:1}"
-HANDLER=${SERV}/pkg/apis/graphql/handler.go
-HANDLER_TST=${SERV}/pkg/apis/graphql/handler_test.go
-RESOLVER=${SERV}/pkg/apis/graphql/resolver.go
-SCHEMA=${SERV}/pkg/apis/graphql/schema.graphql
-SERVICE=${SERV}/cmd/service/service.go
-PACKAGE=/src
+corrige_pastas
 
 while [ "X${TRANSPORT_DONE}" != "Xn" ] ; do
     echo "Indique qual transporte, http, grpc, graphql?"
@@ -172,14 +221,9 @@ done
 
 #Corrigindo pastas
 echo "Corrigindo pastas..."
+mkdir -p ${SERV}/pkg/apis
+corrige_pastas
 cd ${SERV}
-
-mkdir -p pkg/apis
-move_service 
-move_grpc
-move_http
-move_endpoint
-
 goimports -w cmd/service/init_service.go
 cd -
 find ${SERV} |grep -v .git
