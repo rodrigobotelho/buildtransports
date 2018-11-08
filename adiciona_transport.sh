@@ -196,8 +196,8 @@ while [ "X${TRANSPORT_DONE}" != "Xn" ] ; do
         if [ "X${TRANSP}" != "X" ] ; then
             TRANSP="-t ${TRANSP}"
         fi
-        echo "kit g s ${SERV} ${TRANSP} ${METHODS}"
-        kit g s ${SERV} ${TRANSP} ${METHODS}
+        echo "kit g s ${SERV} --endpoint-mdw --svc-mdw ${TRANSP} ${METHODS}"
+        kit g s ${SERV} --endpoint-mdw --svc-mdw ${TRANSP} ${METHODS}
         echo "kit g c ${SERV} ${TRANSP}"
         kit g c ${SERV} ${TRANSP}
         #Atualiza PathPrefix do http
