@@ -183,6 +183,9 @@ while [ "X${TRANSPORT_DONE}" != "Xn" ] ; do
             cat ${PACKAGE}/graphql/init_handler.go|sed "s/Example/${SERVNAME}/g"|sed "s/example/${SERV}/g" >> ${SERVICE}
             cat ${SERVICE}|sed 's/var grpcAddr.*/&\nvar graphqlAddr = fs.String(\"graphql-addr\", \":8084\", \"graphql listen address\"\)/g' > ${SERVICE}_tmp
             mv ${SERVICE}_tmp ${SERVICE}
+
+            cat ${SERVICE}|sed 's/g := createService.*/&\n\tinitGraphqlHandler\(svc, g\)/g' > ${SERVICE}_tmp
+            mv ${SERVICE}_tmp ${SERVICE}
             goimports -w ${SERVICE}
         fi
     else

@@ -1,6 +1,6 @@
 func initGraphqlHandler(svc service.ExampleService, g *group.Group) {
     //Mude aqui o schema
-    schema:="pkg/graphql/schema.graphql"
+    schema:="pkg/apis/graphql/schema.graphql"
     secret:=os.Getenv("AUTH_PRIVATE_KEY")
 	graphqlHandler := graphql.NewHandler(
 		svc,
