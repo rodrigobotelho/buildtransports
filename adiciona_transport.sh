@@ -228,6 +228,8 @@ mkdir -p ${SERV}/pkg/apis
 corrige_pastas
 cd ${SERV}
 goimports -w cmd/service/init_service.go
+goimports -w pkg/apis/service/middleware.go
+goimports -w pkg/apis/endpoint/endpoint.go
 cd -
 find ${SERV} |grep -v .git
 
