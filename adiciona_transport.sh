@@ -178,7 +178,7 @@ while [ "X${TRANSPORT_DONE}" != "Xn" ] ; do
             goimports -w ${RESOLVER}
             cat ${PACKAGE}/graphql/handler.go|sed "s/Example/${SERVNAME}/g"|sed "s/example/${SERV}/g" > ${HANDLER}
             goimports -w ${HANDLER}
-            cp ${PACKAGE}/graphql/handler_test.go ${HANDLER_TST}
+            cat ${PACKAGE}/graphql/handler_test.go|sed "s/NewBasicExampleService/NewBasic${SERVNAME}Service/g"  > ${HANDLER_TST}
             touch ${SCHEMA}
             cat ${PACKAGE}/graphql/init_handler.go|sed "s/Example/${SERVNAME}/g"|sed "s/example/${SERV}/g" >> ${SERVICE}
             cat ${SERVICE}|sed 's/var grpcAddr.*/&\nvar graphqlAddr = fs.String(\"graphql-addr\", \":8084\", \"graphql listen address\"\)/g' > ${SERVICE}_tmp
