@@ -26,14 +26,30 @@ func TestHandler(t *testing.T) {
 			mux := http.NewServeMux()
 			mux.Handle("/", h.Handler())
 			for _, args := range tt.args {
-				req, _ := graphqlkit.CreateGraphqlRequest(args.request)
+				ar := strings.Replace(args.request, "\n", `\n`, -1)
+				ar = strings.Replace(ar, "\t", "  ", -1)
+				req, _ := graphqlkit.CreateGraphqlRequest(ar)
 				rec := httptest.NewRecorder()
 				mux.ServeHTTP(rec, req)
-				if rec.Body.String() != args.response {
+                var v interface{}
+				err := json.Unmarshal([]byte(args.response), &v)
+				if err != nil {
+					t.Error(err)
+				}
+				b, _ := json.Marshal(v)
+				resp := string(b)
+				if !strings.Contains(resp, "data") &&
+					!strings.Contains(resp, "errors") {
+					resp = fmt.Sprintf(`{"data":%v}`, resp)
+				}
+                var v1, v2 interface{}
+				json.Unmarshal([]byte(rec.Body.String()), &v1)
+				json.Unmarshal([]byte(resp), &v2)
+				if !reflect.DeepEqual(v1, v2) {
 					t.Errorf(
 						"Body = %v, want %v",
 						rec.Body.String(),
-						args.response,
+						resp,
 					)
 				}
 			}
