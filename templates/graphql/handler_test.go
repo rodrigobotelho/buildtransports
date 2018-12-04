@@ -42,7 +42,10 @@ func TestHandler(t *testing.T) {
 					!strings.Contains(resp, "errors") {
 					resp = fmt.Sprintf(`{"data":%v}`, resp)
 				}
-				if rec.Body.String() != resp {
+                var v1, v2 interface{}
+				json.Unmarshal([]byte(rec.Body.String()), &v1)
+				json.Unmarshal([]byte(resp), &v2)
+				if !reflect.DeepEqual(v1, v2) {
 					t.Errorf(
 						"Body = %v, want %v",
 						rec.Body.String(),
