@@ -26,7 +26,9 @@ func TestHandler(t *testing.T) {
 			mux := http.NewServeMux()
 			mux.Handle("/", h.Handler())
 			for _, args := range tt.args {
-				req, _ := graphqlkit.CreateGraphqlRequest(args.request)
+				ar := strings.Replace(args.request, "\n", `\n`, -1)
+				ar = strings.Replace(ar, "\t", "  ", -1)
+				req, _ := graphqlkit.CreateGraphqlRequest(ar)
 				rec := httptest.NewRecorder()
 				mux.ServeHTTP(rec, req)
                 var v interface{}
