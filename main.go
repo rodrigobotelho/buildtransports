@@ -138,7 +138,7 @@ func main() {
 			if scanner.Scan() {
 				metodos = scanner.Text()
 				if metodos != "" {
-					metodos = "-m " + metodos
+					metodos = "-m " + strings.Join(strings.Fields(metodos), " -m ")
 				}
 			}
 			if transporte != "" {
