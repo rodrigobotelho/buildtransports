@@ -1,9 +1,13 @@
 package graphql
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"siop/noticias/pkg/apis/service"
+	"strings"
 	"testing"
 
 	"github.com/rodrigobotelho/graphql-kit"
@@ -31,7 +35,7 @@ func TestHandler(t *testing.T) {
 				req, _ := graphqlkit.CreateGraphqlRequest(ar)
 				rec := httptest.NewRecorder()
 				mux.ServeHTTP(rec, req)
-                var v interface{}
+				var v interface{}
 				err := json.Unmarshal([]byte(args.response), &v)
 				if err != nil {
 					t.Error(err)
@@ -42,7 +46,7 @@ func TestHandler(t *testing.T) {
 					!strings.Contains(resp, "errors") {
 					resp = fmt.Sprintf(`{"data":%v}`, resp)
 				}
-                var v1, v2 interface{}
+				var v1, v2 interface{}
 				json.Unmarshal([]byte(rec.Body.String()), &v1)
 				json.Unmarshal([]byte(resp), &v2)
 				if !reflect.DeepEqual(v1, v2) {
