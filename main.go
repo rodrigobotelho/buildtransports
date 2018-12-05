@@ -1,14 +1,21 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"go/ast"
 	"go/build"
+	"go/parser"
+	"go/printer"
+	"go/token"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"golang.org/x/tools/go/ast/astutil"
 
 	_ "google.golang.org/grpc"
 )
@@ -54,6 +61,9 @@ func main() {
 	}
 	corrigePastas(serv)
 	defer func() {
+		if r := recover(); r != nil {
+			panic(r)
+		}
 		fmt.Println("Corrigindo pastas...")
 		err := os.MkdirAll(serv+"/pkg/apis", os.ModePerm)
 		check(err, "erro ao criar pasta pkg/apis: %v", err)
@@ -107,11 +117,11 @@ func main() {
 				appendTo(service, initHandler)
 				sed(service, "Example", servName)
 				sed(service, "example", serv)
-				sed(service, "(var grpcAddr.*)", graphqlAddr)
+				sed(service, "var grpcAddr.*", "&"+graphqlAddr)
 				sed(
 					service,
-					"(g := createService.*)",
-					"\n\tinitGraphqlHandler(svc, g)",
+					"g := createService.*",
+					"&\n\tinitGraphqlHandler(svc, g)",
 				)
 				run("goimports -w " + service)
 			}
@@ -157,39 +167,18 @@ func main() {
 }
 
 func criaEstruturaDePastasBasicasSeNecessario(serv string) {
-	/*
-		if _, err := os.Stat(serv + "/cmd/service/service.go"); !os.IsNotExist(err) {
-			return
-		}
-		run("kit g s %v --endpoint-mdw --svc-mdw", serv)
-		run("kit g c %v", serv)
-		err := os.RemoveAll(serv + "/pkg/http")
-		check(err, "erro ao remover pasta: %v", err)
-		err = os.RemoveAll(serv + "/client/http")
-		check(err, "erro ao remover pasta: %v", err)
-		sed(serv+"/cmd/service/service.go", ".*pkg/http.*", "")
-		sed(serv+"/cmd/service/service_gen.go", ".*pkg/http.*", "")
-		bufio.NewScanner(nil)
-		sed(
-			serv+"/cmd/service/service_gen.go",
-			"github.com/go-kit/kit/tracing/opentracing",
-			"",
-		)
-		sed(
-			serv+"/cmd/service/service_gen.go",
-			"github.com/go-kit/kit/transport/http",
-			"",
-		)
-		sed(
-			serv+"/cmd/service/service_gen.go",
-			"github.com/opentracing/opentracing-go",
-			"",
-		)
-		fmt.Sprintf("\"mutation EnviaEmail($remetente: String, $para: [String], $assunto: String, $texto: String) {" +
-			" enviaEmail(remetente: $remetente, para: $para, assunto: $assunto, texto: $texto) }" +
-			"\", \"variables\": { \"remetente\": \"%s\", \"para\": %s, \"assunto\": \"%s\", \"texto\": \"%s\"}" +
-			", \"operationName\":\"EnviaEmail\"")
-	*/
+	if _, err := os.Stat(serv + "/cmd/service/service.go"); !os.IsNotExist(err) {
+		return
+	}
+	run("kit g s %v --endpoint-mdw --svc-mdw", serv)
+	run("kit g c %v", serv)
+	err := os.RemoveAll(serv + "/pkg/http")
+	check(err, "erro ao remover pasta: %v", err)
+	err = os.RemoveAll(serv + "/client/http")
+	check(err, "erro ao remover pasta: %v", err)
+	deleteFunc(serv+"/cmd/service/service.go", "initHttpHandler")
+	deleteFunc(serv+"/cmd/service/service_gen.go", "defaultHttpOptions")
+	sed(serv+"/cmd/service/service_gen.go", ".*initHttpHandler.*", "")
 }
 
 func servicoJaExiste(serv string) bool {
@@ -246,9 +235,9 @@ func sed(file, old, new string) {
 	check(err, "erro ao ler arquivo '%v': %v", file, err)
 	re := regexp.MustCompile(old)
 	var str string
-	if old[0] == '(' {
+	if len(new) > 0 && new[0] == '&' {
 		str = re.ReplaceAllStringFunc(string(b), func(s string) string {
-			return s + new
+			return s + new[1:]
 		})
 	} else {
 		str = re.ReplaceAllString(string(b), new)
@@ -262,6 +251,30 @@ func cp(in, out string) {
 	check(err, "erro ao ler arquivo '%v': %v", in, err)
 	err = ioutil.WriteFile(out, b, os.ModePerm)
 	check(err, "erro ao escrever arquivo '%v': %v", out, err)
+}
+
+func deleteFunc(path, fn string) {
+	af := func(c *astutil.Cursor) bool {
+		n, ok := c.Node().(*ast.FuncDecl)
+		if !ok {
+			return true
+		}
+		if n.Name.Name == fn {
+			c.Delete()
+			return false
+		}
+		return true
+	}
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
+	check(err, "erro ao fazer parse de '%v': %v", path, err)
+	result := astutil.Apply(file, af, nil)
+	var buf bytes.Buffer
+	err = printer.Fprint(&buf, fset, result)
+	check(err, "erro ao imprimir '%v': %v", path, err)
+	err = ioutil.WriteFile(path, buf.Bytes(), os.ModePerm)
+	check(err, "erro ao gravar '%v': %v", path, err)
+	run("goimports -w " + path)
 }
 
 func check(err error, msg string, a ...interface{}) {
