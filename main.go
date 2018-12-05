@@ -98,19 +98,13 @@ func main() {
 				check(err, "erro ao criar pasta: '%v'", err)
 				_, err = os.OpenFile(schema, os.O_RDONLY|os.O_CREATE, os.ModePerm)
 				check(err, "erro ao criar schema: %v", err)
-				for _, file := range []string{resolver, handler} {
+				for _, file := range []string{resolver, handler, handlerTest} {
 					name := file[strings.LastIndex(file, "/"):]
 					cp(templates+"/graphql/"+name, file)
 					sed(file, "Example", servName)
 					sed(file, "example", serv)
 					run("goimports -w " + file)
 				}
-				cp(templates+"/graphql/handler_test.go", handlerTest)
-				sed(
-					handlerTest,
-					"NewBasicExampleService",
-					"NewBasic"+servName+"Service",
-				)
 				b1, err := ioutil.ReadFile(templates + "/graphql/init_handler.go")
 				check(err, "erro ao ler arquivo: %v", err)
 				initHandler := string(b1)

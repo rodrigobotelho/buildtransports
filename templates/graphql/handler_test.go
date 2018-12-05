@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"siop/noticias/pkg/apis/service"
+	"siop/example/pkg/apis/service"
 	"strings"
 	"testing"
 
