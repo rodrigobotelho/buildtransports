@@ -8,29 +8,29 @@ import (
 	graphqlkit "github.com/rodrigobotelho/graphql-kit"
 )
 
-// GraphqlHandler Usado para criar um servidor graphql com autenticação
-type GraphqlHandler struct {
-	example     service.ExampleService
-	secret      string
-	Schema      string
-	logger      log.Logger
+// Handler Usado para criar um servidor graphql com autenticação
+type Handler struct {
+	example service.ExampleService
+	secret  string
+	Schema  string
+	logger  log.Logger
 }
 
 // NewHandler Cria um novo handler graphql com autenticação e logging
-func NewHandler(example service.ExampleService, schema, secret string, logger log.Logger) *GraphqlHandler {
-	return &GraphqlHandler{
-		example:     example,
-		secret:      secret,
-		Schema:      schema,
-		logger:      logger,
+func NewHandler(example service.ExampleService, schema, secret string, logger log.Logger) *Handler {
+	return &Handler{
+		example: example,
+		secret:  secret,
+		Schema:  schema,
+		logger:  logger,
 	}
 }
 
 // Handler Retorna um handler http que vai cuidar de requisições graphql
-func (h *GraphqlHandler) Handler() http.Handler {
+func (h *Handler) Handler() http.Handler {
 	res := NewResolver(h.example)
-	handler := graphqlkit.Handlers{}
-    handler.AddFullGraphqlService(
+	handlers := graphqlkit.Handlers{}
+	handlers.AddFullGraphqlService(
 		h.Schema,
 		res,
 		h.logger,
@@ -40,6 +40,5 @@ func (h *GraphqlHandler) Handler() http.Handler {
 		jwt.SigningMethodHS512,
 		&jwt.StandardClaims{},
 	)
-	return handler.Handler()
+	return handlers.Handler()
 }
-
