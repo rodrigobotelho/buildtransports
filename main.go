@@ -18,6 +18,8 @@ import (
 
 	"golang.org/x/tools/go/ast/astutil"
 
+	_ "github.com/graph-gophers/graphql-go"
+	_ "github.com/rodrigobotelho/graphql-kit"
 	_ "google.golang.org/grpc"
 )
 
@@ -26,6 +28,9 @@ const pathPrefixSrc = `
 const PathPrefix=""`
 const graphqlAddr = `
 var graphqlAddr = fs.String("graphql-addr", ":8084", "graphql listen address")`
+const graphqlGoPath = "src/github.com/graph-gophers/graphql-go"
+const patchGraphqlKit = `opts := []graphql.SchemaOpt{graphql.UseFieldResolvers()}
+       return graphql.MustParseSchema(string(schemaFile), res, opts...)`
 
 func main() {
 	if len(os.Args) < 2 {
@@ -73,6 +78,7 @@ func main() {
 		run("goimports -w %v/pkg/apis/service/middleware.go", serv)
 		run("goimports -w %v/pkg/apis/endpoint/endpoint.go", serv)
 	}()
+	count := 0
 	for {
 		fmt.Println("Indique qual transporte: http, grpc, graphql " +
 			"(ou vazio para encerrar)")
@@ -88,48 +94,45 @@ func main() {
 					"TEM CERTEZA que deseja substituí-lo? s ou n?")
 				fmt.Scanln(&sn)
 			}
-			if sn == "s" {
-				criaEstruturaDePastasBasicasSeNecessario(serv)
-				resolver := serv + "/pkg/apis/graphql/resolver.go"
-				handler := serv + "/pkg/apis/graphql/handler.go"
-				handlerTest := serv + "/pkg/apis/graphql/handler_test.go"
-				schema := serv + "/pkg/apis/graphql/schema.graphql"
-				err := os.MkdirAll(serv+"/pkg/apis/graphql", os.ModePerm)
-				check(err, "erro ao criar pasta: '%v'", err)
-				_, err = os.OpenFile(schema, os.O_RDONLY|os.O_CREATE, os.ModePerm)
-				check(err, "erro ao criar schema: %v", err)
-				for _, file := range []string{resolver, handler} {
-					name := file[strings.LastIndex(file, "/"):]
-					cp(templates+"/graphql/"+name, file)
-					sed(file, "Example", servName)
-					sed(file, "example", serv)
-					run("goimports -w " + file)
-				}
-				cp(templates+"/graphql/handler_test.go", handlerTest)
-				sed(
-					handlerTest,
-					"NewBasicExampleService",
-					"NewBasic"+servName+"Service",
-				)
-				b1, err := ioutil.ReadFile(templates + "/graphql/init_handler.go")
-				check(err, "erro ao ler arquivo: %v", err)
-				initHandler := string(b1)
-				b2, err := ioutil.ReadFile(service)
-				check(err, "erro ao ler arquivo: %v", err)
-				if !strings.Contains(string(b2), "http1") {
-					initHandler = strings.Replace(initHandler, "http1", "http", -1)
-				}
-				appendTo(service, initHandler)
-				sed(service, "Example", servName)
-				sed(service, "example", serv)
-				sed(service, "var grpcAddr.*", "&"+graphqlAddr)
-				sed(
-					service,
-					"g := createService.*",
-					"&\n\tinitGraphqlHandler(svc, g)",
-				)
-				run("goimports -w " + service)
+			if sn == "n" {
+				continue
 			}
+			criaEstruturaDePastasBasicasSeNecessario(serv)
+			resolver := serv + "/pkg/apis/graphql/resolver.go"
+			handler := serv + "/pkg/apis/graphql/handler.go"
+			handlerTest := serv + "/pkg/apis/graphql/handler_test.go"
+			schema := serv + "/pkg/apis/graphql/schema.graphql"
+			err := os.MkdirAll(serv+"/pkg/apis/graphql", os.ModePerm)
+			check(err, "erro ao criar pasta: '%v'", err)
+			_, err = os.OpenFile(schema, os.O_RDONLY|os.O_CREATE, os.ModePerm)
+			check(err, "erro ao criar schema: %v", err)
+			for _, file := range []string{resolver, handler, handlerTest} {
+				name := file[strings.LastIndex(file, "/"):]
+				cp(templates+"/graphql/"+name, file)
+				sed(file, "Example", servName)
+				sed(file, "example", serv)
+				run("goimports -w " + file)
+			}
+			b1, err := ioutil.ReadFile(templates + "/graphql/init_handler.go")
+			check(err, "erro ao ler arquivo: %v", err)
+			initHandler := string(b1)
+			b2, err := ioutil.ReadFile(service)
+			check(err, "erro ao ler arquivo: %v", err)
+			if !strings.Contains(string(b2), "http1") {
+				initHandler = strings.Replace(initHandler, "http1", "http", -1)
+			}
+			appendTo(service, initHandler)
+			sed(service, "Example", servName)
+			sed(service, "example", serv)
+			sed(service, "var grpcAddr.*", "&"+graphqlAddr)
+			sed(
+				service,
+				"g := createService.*",
+				"&\n\tinitGraphqlHandler(svc, g)",
+			)
+			run("goimports -w " + service)
+			aplicaPatchDoGraphqlGo()
+			count++
 		} else {
 			fmt.Println("Indique os métodos separados por espaço, " +
 				"vazio se todos.")
@@ -159,12 +162,17 @@ func main() {
 					run("goimports -w " + httpHandler)
 				}
 			}
+			count++
 		}
+	}
+	if count > 0 {
 		in := templates + "/init_service.go"
 		out := serv + "/cmd/service/init_service.go"
 		cp(in, out)
 		sed(out, "Example", servName)
 		sed(service, "svc := service.New.*", "svc := initService()")
+		sed(service, "func Run.*", "// Run runs service\n&")
+		sed(serv+"/pkg/endpoint/endpoint.go", "// Failer", "// Failure")
 	}
 }
 
@@ -181,6 +189,7 @@ func criaEstruturaDePastasBasicasSeNecessario(serv string) {
 	deleteFunc(serv+"/cmd/service/service.go", "initHttpHandler")
 	deleteFunc(serv+"/cmd/service/service_gen.go", "defaultHttpOptions")
 	sed(serv+"/cmd/service/service_gen.go", ".*initHttpHandler.*", "")
+	sed(serv+"/pkg/service/service.go", "var svc .* =", "var svc =")
 }
 
 func servicoJaExiste(serv string) bool {
@@ -216,6 +225,37 @@ func move(serv, path string) {
 	}
 }
 
+func aplicaPatchDoGraphqlGo() {
+	if graphqlGoPermiteUsarCamposNoResolver() {
+		return
+	}
+	run("go get -u github.com/graph-gophers/graphql-go")
+	if graphqlGoPermiteUsarCamposNoResolver() {
+		return
+	}
+	gopath := build.Default.GOPATH
+	patch := "src/github.com/rodrigobotelho/buildtransports/patches/" +
+		"0001-Use-struct-fields-as-resolvers-instead-of-methods-28.patch"
+	dir, err := os.Getwd()
+	check(err, "erro ao obter o diretório atual: %v", err)
+	os.Chdir(gopath + "/" + graphqlGoPath)
+	run("git apply " + gopath + "/" + patch)
+	os.Chdir(dir)
+	sed(
+		gopath+"/src/github.com/rodrigobotelho/graphql-kit/service.go",
+		"return graphql.MustParseSchema.*",
+		patchGraphqlKit,
+	)
+}
+
+func graphqlGoPermiteUsarCamposNoResolver() bool {
+	b, err := ioutil.ReadFile(
+		build.Default.GOPATH + "/" + graphqlGoPath + "/graphql.go",
+	)
+	check(err, "erro ao ler arquivo: %v", err)
+	return strings.Contains(string(b), "UseFieldResolvers")
+}
+
 func run(format string, a ...interface{}) string {
 	cmd := fmt.Sprintf(format, a...)
 	args := strings.Fields(cmd)
@@ -237,9 +277,12 @@ func sed(file, old, new string) {
 	check(err, "erro ao ler arquivo '%v': %v", file, err)
 	re := regexp.MustCompile(old)
 	var str string
-	if len(new) > 0 && new[0] == '&' {
+	if len(new) > 0 && (new[0] == '&' || new[len(new)-1] == '&') {
 		str = re.ReplaceAllStringFunc(string(b), func(s string) string {
-			return s + new[1:]
+			if new[0] == '&' {
+				return s + new[1:]
+			}
+			return new[:len(new)-1] + s
 		})
 	} else {
 		str = re.ReplaceAllString(string(b), new)
