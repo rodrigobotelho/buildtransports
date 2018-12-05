@@ -74,9 +74,13 @@ func main() {
 		run("goimports -w %v/pkg/apis/endpoint/endpoint.go", serv)
 	}()
 	for {
-		fmt.Println("Indique qual transporte: http, grpc, graphql?")
+		fmt.Println("Indique qual transporte: http, grpc, graphql " +
+			"(ou vazio para encerrar)")
 		var transporte string
 		fmt.Scanln(&transporte)
+		if transporte == "" {
+			break
+		}
 		if transporte == "graphql" {
 			sn := "s"
 			if _, err := os.Stat(serv + "/pkg/apis/graphql"); !os.IsNotExist(err) {
@@ -161,12 +165,6 @@ func main() {
 		cp(in, out)
 		sed(out, "Example", servName)
 		sed(service, "svc := service.New.*", "svc := initService()")
-		fmt.Println("Quer configurar um novo transporte? s ou n?")
-		var sn string
-		fmt.Scanln(&sn)
-		if sn == "n" {
-			break
-		}
 	}
 }
 
