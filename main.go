@@ -18,6 +18,8 @@ import (
 
 	"golang.org/x/tools/go/ast/astutil"
 
+	_ "github.com/graph-gophers/graphql-go"
+	_ "github.com/rodrigobotelho/graphql-kit"
 	_ "google.golang.org/grpc"
 )
 
@@ -26,6 +28,9 @@ const pathPrefixSrc = `
 const PathPrefix=""`
 const graphqlAddr = `
 var graphqlAddr = fs.String("graphql-addr", ":8084", "graphql listen address")`
+const graphqlGoPath = "src/github.com/graph-gophers/graphql-go"
+const patchGraphqlKit = `opts := []graphql.SchemaOpt{graphql.UseFieldResolvers()}
+       return graphql.MustParseSchema(string(schemaFile), res, opts...)`
 
 func main() {
 	if len(os.Args) < 2 {
@@ -126,6 +131,7 @@ func main() {
 				"&\n\tinitGraphqlHandler(svc, g)",
 			)
 			run("goimports -w " + service)
+			aplicaPatchDoGraphqlGo()
 			count++
 		} else {
 			fmt.Println("Indique os métodos separados por espaço, " +
@@ -217,6 +223,37 @@ func move(serv, path string) {
 		check(err, "erro ao mover pastas: %v", err)
 		run("gomove %v/pkg/apis/%v %v/pkg/%v", serv, path, serv, path)
 	}
+}
+
+func aplicaPatchDoGraphqlGo() {
+	if graphqlGoPermiteUsarCamposNoResolver() {
+		return
+	}
+	run("go get -u github.com/graph-gophers/graphql-go")
+	if graphqlGoPermiteUsarCamposNoResolver() {
+		return
+	}
+	gopath := build.Default.GOPATH
+	patch := "src/github.com/rodrigobotelho/buildtransports/patches/" +
+		"0001-Use-struct-fields-as-resolvers-instead-of-methods-28.patch"
+	dir, err := os.Getwd()
+	check(err, "erro ao obter o diretório atual: %v", err)
+	os.Chdir(gopath + "/" + graphqlGoPath)
+	run("git apply " + gopath + "/" + patch)
+	os.Chdir(dir)
+	sed(
+		gopath+"/src/github.com/rodrigobotelho/graphql-kit/service.go",
+		"return graphql.MustParseSchema.*",
+		patchGraphqlKit,
+	)
+}
+
+func graphqlGoPermiteUsarCamposNoResolver() bool {
+	b, err := ioutil.ReadFile(
+		build.Default.GOPATH + "/" + graphqlGoPath + "/graphql.go",
+	)
+	check(err, "erro ao ler arquivo: %v", err)
+	return strings.Contains(string(b), "UseFieldResolvers")
 }
 
 func run(format string, a ...interface{}) string {
