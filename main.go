@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"go/ast"
@@ -129,9 +130,12 @@ func main() {
 			fmt.Println("Indique os métodos separados por espaço, " +
 				"vazio se todos.")
 			var metodos string
-			fmt.Scanln(&metodos)
-			if metodos != "" {
-				metodos = "-m " + metodos
+			scanner := bufio.NewScanner(os.Stdin)
+			if scanner.Scan() {
+				metodos = scanner.Text()
+				if metodos != "" {
+					metodos = "-m " + metodos
+				}
 			}
 			if transporte != "" {
 				transporte = "-t " + transporte
