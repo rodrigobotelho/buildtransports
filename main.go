@@ -130,7 +130,13 @@ func main() {
 				"g := createService.*",
 				"&\n\tinitGraphqlHandler(svc, g)",
 			)
+			sed(
+				handler,
+				`"module_name"`,
+				`fmt.Sprintf("`+servName+`_%d", time.Now().Nanosecond())`,
+			)
 			run("goimports -w " + service)
+			run("goimports -w " + handler)
 			aplicaPatchDoGraphqlGo()
 			count++
 		} else {
