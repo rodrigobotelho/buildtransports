@@ -30,7 +30,18 @@ const graphqlAddr = `
 var graphqlAddr = fs.String("graphql-addr", ":8084", "graphql listen address")`
 const graphqlGoPath = "src/github.com/graph-gophers/graphql-go"
 const patchGraphqlKit = `opts := []graphql.SchemaOpt{graphql.UseFieldResolvers()}
-       return graphql.MustParseSchema(string(schemaFile), res, opts...)`
+	   return graphql.MustParseSchema(string(schemaFile), res, opts...)`
+const patchDockerfile1 = `RUN git clone https://github.com/salman-ahmad/graphql-go /patch \
+&& cd /patch \
+&& git format-patch \
+	940d2b01f2549ee5d9e87141ea909134bf56e3a9..\
+	86130ac51668b74fefdb5fca5cf78a8865a26845 \
+&& cd /go/pkg/mod/github.com/graph-gophers/$(ls /go/pkg/mod/github.com/graph-gophers) \
+&& git apply /patch/*.patch \
+&& cd /app`
+const patchDockerfile2 = `RUN sed -i 's/return graphql.MustParseSchema.*/opts := []graphql.SchemaOpt{graphql.UseFieldResolvers()}\n        return graphql.MustParseSchema(string(schemaFile), res, opts...)/g' \
+	/go/pkg/mod/github.com/rodrigobotelho/$(ls /go/pkg/mod/github.com/rodrigobotelho)/service.go`
+const schemaGraphqlDockerfile = "COPY --from=stage1 /app/pkg/apis/graphql/schema.graphql /"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -179,6 +190,19 @@ func main() {
 		sed(service, "svc := service.New.*", "svc := initService()")
 		sed(service, "func Run.*", "// Run runs service\n&")
 		sed(serv+"/pkg/endpoint/endpoint.go", "// Failer", "// Failure")
+		if _, err := os.Stat(serv + "/Dockerfile"); os.IsNotExist(err) {
+			cp(templates+"/Dockerfile", serv+"/Dockerfile")
+			if _, err := os.Stat(serv + "/pkg/apis/graphql"); !os.IsNotExist(err) {
+				sed(serv+"/Dockerfile", "exemplo", servName)
+				sed(serv+"/Dockerfile", "# graphql patch1", patchDockerfile1)
+				sed(serv+"/Dockerfile", "# graphql patch2", patchDockerfile2)
+				sed(
+					serv+"/Dockerfile",
+					"# copy schema.graphql",
+					schemaGraphqlDockerfile,
+				)
+			}
+		}
 	}
 }
 
