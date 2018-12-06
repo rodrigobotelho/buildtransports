@@ -41,7 +41,7 @@ const patchDockerfile1 = `RUN git clone https://github.com/salman-ahmad/graphql-
 && cd /app`
 const patchDockerfile2 = `RUN sed -i 's/return graphql.MustParseSchema.*/opts := []graphql.SchemaOpt{graphql.UseFieldResolvers()}\n        return graphql.MustParseSchema(string(schemaFile), res, opts...)/g' \
 	/go/pkg/mod/github.com/rodrigobotelho/$(ls /go/pkg/mod/github.com/rodrigobotelho)/service.go`
-const schemaGraphqlDockerfile = "COPY --from=stage1 /app/pkg/apis/graphql/schema.graphql /"
+const schemaGraphqlDockerfile = "COPY --from=stage1 /app/pkg/apis/graphql/schema.graphql /pkg/apis/graphql/schema.graphql"
 
 func main() {
 	if len(os.Args) < 2 {
