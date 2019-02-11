@@ -19,6 +19,7 @@ import (
 	"golang.org/x/tools/go/ast/astutil"
 
 	_ "github.com/graph-gophers/graphql-go"
+	_ "github.com/mcesar/copier"
 	_ "github.com/rodrigobotelho/graphql-kit"
 	_ "google.golang.org/grpc"
 )
@@ -179,6 +180,10 @@ func main() {
 					run("goimports -w " + httpHandler)
 				}
 			}
+			if transporte == "-t grpc" {
+				replaceGprcEncodersAndDecoders(serv + "/pkg/grpc/handler.go")
+				replaceGprcEncodersAndDecoders(serv + "/client/grpc/grpc.go")
+			}
 			count++
 		}
 	}
@@ -329,7 +334,7 @@ func cp(in, out string) {
 }
 
 func deleteFunc(path, fn string) {
-	af := func(c *astutil.Cursor) bool {
+	astApply(path, func(c *astutil.Cursor) bool {
 		n, ok := c.Node().(*ast.FuncDecl)
 		if !ok {
 			return true
@@ -339,7 +344,67 @@ func deleteFunc(path, fn string) {
 			return false
 		}
 		return true
+	})
+}
+
+func replaceGprcEncodersAndDecoders(path string) {
+	decodeRequest := regexp.MustCompile(`decode(.+)Request`)
+	decodeResponse := regexp.MustCompile(`decode(.+)Response`)
+	encodeRequest := regexp.MustCompile(`encode(.+)Request`)
+	encodeResponse := regexp.MustCompile(`encode(.+)Response`)
+	method := func(n *ast.FuncDecl, r *regexp.Regexp) string {
+		return r.FindStringSubmatch(n.Name.Name)[1]
 	}
+	callExpr := func(fn, pkg, reqRes string, n *ast.FuncDecl, r *regexp.Regexp) bool {
+		ret, ok := n.Body.List[0].(*ast.ReturnStmt)
+		if !ok {
+			return false
+		}
+		id, ok := ret.Results[0].(*ast.Ident)
+		if !ok || id.String() != "nil" {
+			return false
+		}
+		ret.Results[0] = &ast.CallExpr{
+			Fun: &ast.Ident{Name: fn},
+			Args: []ast.Expr{
+				&ast.UnaryExpr{
+					Op: token.AND,
+					X: &ast.CompositeLit{
+						Type: &ast.Ident{
+							Name: pkg + "." + method(n, r) + reqRes,
+						},
+					},
+				},
+				&ast.Ident{Name: n.Type.Params.List[1].Names[0].Name},
+			},
+		}
+		if r == encodeResponse {
+			ret.Results[1] =
+				&ast.Ident{Name: "r.(endpoint." + method(n, r) + "Response).Err"}
+		} else {
+			ret.Results[1] = &ast.Ident{Name: "nil"}
+		}
+		return false
+	}
+	astApply(path, func(c *astutil.Cursor) bool {
+		n, ok := c.Node().(*ast.FuncDecl)
+		if !ok {
+			return true
+		}
+		if decodeRequest.MatchString(n.Name.Name) {
+			return callExpr("copier.CopyAndDereference", "endpoint", "Request", n, decodeRequest)
+		} else if decodeResponse.MatchString(n.Name.Name) {
+			return callExpr("copier.CopyAndDereference", "endpoint1", "Response", n, decodeResponse)
+		} else if encodeRequest.MatchString(n.Name.Name) {
+			return callExpr("copier.Copy", "pb", "Request", n, encodeRequest)
+		} else if encodeResponse.MatchString(n.Name.Name) {
+			return callExpr("copier.Copy", "pb", "Reply", n, encodeResponse)
+		}
+		return true
+	})
+}
+
+func astApply(path string, af func(c *astutil.Cursor) bool) {
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
 	check(err, "erro ao fazer parse de '%v': %v", path, err)
