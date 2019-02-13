@@ -12,7 +12,7 @@ import (
 	grpc1 "google.golang.org/grpc"
 )
 
-func TestBuscar(t *testing.T) {
+func Test(t *testing.T) {
 	casos := []struct {
 		nome    string
 		script  string
