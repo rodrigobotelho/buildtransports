@@ -174,6 +174,12 @@ func Build(serv string) {
 			if transporte == "-t grpc" {
 				replaceGprcEncodersAndDecoders(serv + "/pkg/grpc/handler.go")
 				replaceGprcEncodersAndDecoders(serv + "/client/grpc/grpc.go")
+				handlerTest := serv + "/pkg/grpc/handler_test.go"
+				if _, err := os.Stat(handlerTest); os.IsNotExist(err) {
+					cp(templates+"/grpc/handler_test.go", handlerTest)
+					Sed(handlerTest, "Exemplo", servName)
+					Run("goimports -w " + handlerTest)
+				}
 			}
 			count++
 		}
