@@ -16,12 +16,10 @@ go-kit, kit-cli, go-imports, go-move
    será indicado posteriormente nos arquivos de schema e resolver
 5- http: Pronto para rodar
    grpc: 
-        1- Deve alterar o *.proto colocando os campos do request e
-           Reply
-        2- Deve alterar os métodos enconde e decode do grpc/handler.go
-           para fazer a tradução do pb para o serviço
-        3- Deve alterar os métodos enconde e decode do client/grpc
-           para fazer a tradução do serviço para o pb
+        1- Deve alterar o *.proto colocando os campos do Request e
+           Reply, tendo o cuidado de definir nomes de campos iguais
+           aos nomes dos parametros e do retorno conforme cada método
+           que consta no arquivo service.go
    graphql:
         1- Deve alterar o schema.graphql para colocar os métodos e
            os tipos necessários 
