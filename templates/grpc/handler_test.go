@@ -32,7 +32,7 @@ func grpcRun(script string, tf func(service.ExemploService, dbrx.DML, *testing.T
 		svc := service.NewBasicExemploService(conn)
 		endpoints := endpoint.New(svc, map[string][]endpoint1.Middleware{})
 		grpcServer := NewGRPCServer(endpoints, nil)
-		grpcListener, err := net.Listen("tcp", ":8888")
+		grpcListener, err := net.Listen("tcp", "")
 		if err != nil {
 			panic(err)
 		}
@@ -43,7 +43,7 @@ func grpcRun(script string, tf func(service.ExemploService, dbrx.DML, *testing.T
 			pb.RegisterExemploServer(baseServer, grpcServer)
 			return baseServer.Serve(grpcListener)
 		}()
-		cc, err := grpc1.Dial(":8888", grpc1.WithInsecure())
+		cc, err := grpc1.Dial(grpcListener.Addr().String(), grpc1.WithInsecure())
 		if err != nil {
 			panic(err)
 		}
