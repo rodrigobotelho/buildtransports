@@ -187,10 +187,13 @@ func Build(serv string) {
 	if count == 0 {
 		return
 	}
-	in := templates + "/init_service.go"
-	out := serv + "/cmd/service/init_service.go"
-	cp(in, out)
-	Sed(out, "Example", servName)
+
+	if _, err := os.Stat(serv + "/cmd/service/init_service.go"); os.IsNotExist(err) {
+		in := templates + "/init_service.go"
+		out := serv + "/cmd/service/init_service.go"
+		cp(in, out)
+		Sed(out, "Example", servName)
+	}
 	Sed(service, "svc := service.New.*", "svc := initService()")
 	Sed(service, "func Run.*", "// Run runs service\n&")
 	Sed(serv+"/pkg/endpoint/endpoint.go", "// Failer", "// Failure")
