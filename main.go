@@ -17,5 +17,9 @@ func main() {
 		)
 		os.Exit(1)
 	}
-	builder.Build(os.Args[1])
+	customName := ""
+	if len(os.Args) > 2 {
+		customName = os.Args[2]
+	}
+	builder.Build(os.Args[1], customName)
 }

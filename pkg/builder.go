@@ -29,54 +29,28 @@ const PathPrefix=""`
 const graphqlAddr = `
 var graphqlAddr = fs.String("graphql-addr", ":8084", "graphql listen address")`
 const graphqlGoPath = "src/github.com/graph-gophers/graphql-go"
-const patchGraphqlKit = `opts := []graphql.SchemaOpt{graphql.UseFieldResolvers()}
-	   return graphql.MustParseSchema(string(schemaFile), res, opts...)`
-const patchDockerfile1 = `RUN git clone https://github.com/salman-ahmad/graphql-go /patch \
-&& cd /patch \
-&& git format-patch \
-	940d2b01f2549ee5d9e87141ea909134bf56e3a9..\
-	86130ac51668b74fefdb5fca5cf78a8865a26845 \
-&& cd /go/pkg/mod/github.com/graph-gophers/$(ls /go/pkg/mod/github.com/graph-gophers) \
-&& git apply /patch/*.patch \
-&& cd /app`
-const patchDockerfile2 = `RUN sed -i 's/return graphql.MustParseSchema.*/opts := []graphql.SchemaOpt{graphql.UseFieldResolvers()}\n        return graphql.MustParseSchema(string(schemaFile), res, opts...)/g' \
-	/go/pkg/mod/github.com/rodrigobotelho/$(ls /go/pkg/mod/github.com/rodrigobotelho)/service.go`
 const schemaGraphqlDockerfile = "COPY --from=stage1 /app/pkg/apis/graphql/schema.graphql /pkg/apis/graphql/schema.graphql"
 
 // Build builds the transports
-func Build(serv string) {
-	for _, tool := range []string{
-		"github.com/kujtimiihoxha/kit",
-		"golang.org/x/tools/cmd/goimports",
-		"github.com/ksubedi/gomove",
-		"github.com/golang/protobuf/protoc-gen-go",
-	} {
-		cmd := tool[strings.LastIndex(tool, "/")+1:]
-		if _, err := exec.LookPath(cmd); err != nil {
-			Run("go get " + tool)
-		}
-	}
+func Build(serv string, customName string) {
+	installRequiredTools()
 	service := serv + "/cmd/service/service.go"
 	servName := strings.Title(serv)
-	httpHandler := serv + "/pkg/http/handler.go"
+	httpHandler := serv + "/pkg/apis/http/handler.go"
 	templates := build.Default.GOPATH +
 		"/src/github.com/rodrigobotelho/buildtransports/templates"
 	if !servicoJaExiste(serv) {
 		Run("kit n s " + serv)
-		appendTo(serv+"/pkg/service/service.go", pathPrefixSrc)
+		appendTo(serv+"/pkg/apis/service/service.go", pathPrefixSrc)
 		fmt.Println("Adicione os métodos que serão utilizados no serviço: " +
 			"pkg/service/service.go")
 		os.Exit(0)
 	}
-	corrigePastas(serv)
 	defer func() {
 		if r := recover(); r != nil {
 			panic(r)
 		}
-		fmt.Println("Corrigindo pastas...")
-		err := os.MkdirAll(serv+"/pkg/apis", os.ModePerm)
-		check(err, "erro ao criar pasta pkg/apis: %v", err)
-		corrigePastas(serv)
+		// TODO: ver se pode remover as 3 linhas abaixo
 		Run("goimports -w %v/cmd/service/init_service.go", serv)
 		Run("goimports -w %v/pkg/apis/service/middleware.go", serv)
 		Run("goimports -w %v/pkg/apis/endpoint/endpoint.go", serv)
@@ -100,7 +74,7 @@ func Build(serv string) {
 			if sn == "n" {
 				continue
 			}
-			criaEstruturaDePastasBasicasSeNecessario(serv)
+			criaEstruturaDePastasBasicasSeNecessario(serv, customName)
 			resolver := serv + "/pkg/apis/graphql/resolver.go"
 			handler := serv + "/pkg/apis/graphql/handler.go"
 			handlerTest := serv + "/pkg/apis/graphql/handler_test.go"
@@ -140,7 +114,6 @@ func Build(serv string) {
 			)
 			Run("goimports -w " + service)
 			Run("goimports -w " + handler)
-			aplicaPatchDoGraphqlGo()
 			count++
 		} else {
 			fmt.Println("Indique os métodos separados por espaço, " +
@@ -156,13 +129,17 @@ func Build(serv string) {
 			if transporte != "" {
 				transporte = "-t " + transporte
 			}
-			Run(
+			fmt.Println(RunKit(
+				customName,
 				"kit g s %v --endpoint-mdw --svc-mdw %v %v",
 				serv,
 				transporte,
 				metodos,
-			)
-			Run("kit g c %v %v", serv, transporte)
+			))
+			if transporte == "-t grpc" {
+				os.Remove(serv + "/client/grpc/grpc.go")
+			}
+			fmt.Println(RunKit(customName, "kit g c %v %v", serv, transporte))
 			if _, err := os.Stat(httpHandler); !os.IsNotExist(err) {
 				b, err := ioutil.ReadFile(httpHandler)
 				check(err, "erro ao ler arquivo '%v': %v", httpHandler, err)
@@ -172,9 +149,9 @@ func Build(serv string) {
 				}
 			}
 			if transporte == "-t grpc" {
-				replaceGprcEncodersAndDecoders(serv + "/pkg/grpc/handler.go")
+				replaceGprcEncodersAndDecoders(serv + "/pkg/apis/grpc/handler.go")
 				replaceGprcEncodersAndDecoders(serv + "/client/grpc/grpc.go")
-				handlerTest := serv + "/pkg/grpc/handler_test.go"
+				handlerTest := serv + "/pkg/apis/grpc/handler_test.go"
 				if _, err := os.Stat(handlerTest); os.IsNotExist(err) {
 					cp(templates+"/grpc/handler_test.go", handlerTest)
 					Sed(handlerTest, "Exemplo", servName)
@@ -195,14 +172,12 @@ func Build(serv string) {
 		Sed(out, "Example", servName)
 	}
 	Sed(service, "svc := service.New.*", "svc := initService()")
-	Sed(service, "func Run.*", "// Run runs service\n&")
-	Sed(serv+"/pkg/endpoint/endpoint.go", "// Failer", "// Failure")
+	Sed(service, "\n\nfunc Run.*", "\n\n// Run runs service\n&")
+	Sed(serv+"/pkg/apis/endpoint/endpoint.go", "// Failer", "// Failure")
 	if _, err := os.Stat(serv + "/Dockerfile"); os.IsNotExist(err) {
 		cp(templates+"/Dockerfile", serv+"/Dockerfile")
 		if _, err := os.Stat(serv + "/pkg/apis/graphql"); !os.IsNotExist(err) {
 			Sed(serv+"/Dockerfile", "exemplo", servName)
-			Sed(serv+"/Dockerfile", "# graphql patch1", patchDockerfile1)
-			Sed(serv+"/Dockerfile", "# graphql patch2", patchDockerfile2)
 			Sed(
 				serv+"/Dockerfile",
 				"# copy schema.graphql",
@@ -213,24 +188,38 @@ func Build(serv string) {
 	Sed(service, "var svc .*= NewBasic", "var svc = NewBasic")
 }
 
-func criaEstruturaDePastasBasicasSeNecessario(serv string) {
+func installRequiredTools() {
+	for _, tool := range []string{
+		"github.com/kujtimiihoxha/kit",
+		"golang.org/x/tools/cmd/goimports",
+		"github.com/ksubedi/gomove",
+		"github.com/golang/protobuf/protoc-gen-go",
+	} {
+		cmd := tool[strings.LastIndex(tool, "/")+1:]
+		if _, err := exec.LookPath(cmd); err != nil {
+			Run("go get " + tool)
+		}
+	}
+}
+
+func criaEstruturaDePastasBasicasSeNecessario(serv string, customName string) {
 	if _, err := os.Stat(serv + "/cmd/service/service.go"); !os.IsNotExist(err) {
 		return
 	}
-	Run("kit g s %v --endpoint-mdw --svc-mdw", serv)
-	Run("kit g c %v", serv)
-	err := os.RemoveAll(serv + "/pkg/http")
+	RunKit(customName, "kit g s %v --endpoint-mdw --svc-mdw", serv)
+	RunKit(customName, "kit g c %v", serv)
+	err := os.RemoveAll(serv + "/pkg/apis/http")
 	check(err, "erro ao remover pasta: %v", err)
 	err = os.RemoveAll(serv + "/client/http")
 	check(err, "erro ao remover pasta: %v", err)
 	deleteFunc(serv+"/cmd/service/service.go", "initHttpHandler")
 	deleteFunc(serv+"/cmd/service/service_gen.go", "defaultHttpOptions")
 	Sed(serv+"/cmd/service/service_gen.go", ".*initHttpHandler.*", "")
-	Sed(serv+"/pkg/service/service.go", "var svc .* =", "var svc =")
+	Sed(serv+"/pkg/apis/service/service.go", "var svc .* =", "var svc =")
 }
 
 func servicoJaExiste(serv string) bool {
-	for _, p := range []string{"/pkg/service", "/pkg/apis/service"} {
+	for _, p := range []string{"/pkg/apis/service", "/pkg/apis/service"} {
 		if _, err := os.Stat(serv + p + "/service.go"); !os.IsNotExist(err) {
 			return true
 		}
@@ -238,69 +227,47 @@ func servicoJaExiste(serv string) bool {
 	return false
 }
 
-func corrigePastas(serv string) {
-	if _, err := os.Stat(serv + "/pkg/apis"); os.IsNotExist(err) {
-		return
-	}
-	move(serv, "service")
-	move(serv, "grpc")
-	move(serv, "http")
-	move(serv, "endpoint")
-}
-
-func move(serv, path string) {
-	_, err1 := os.Stat(fmt.Sprintf("%v/pkg/%v", serv, path))
-	_, err2 := os.Stat(fmt.Sprintf("%v/pkg/apis/%v", serv, path))
-	if !os.IsNotExist(err1) && os.IsNotExist(err2) {
-		err := os.Rename(serv+"/pkg/"+path, serv+"/pkg/apis/"+path)
-		check(err, "erro ao mover pastas: %v", err)
-		Run("gomove %v/pkg/%v %v/pkg/apis/%v", serv, path, serv, path)
-	} else if os.IsNotExist(err1) && !os.IsNotExist(err2) {
-		err := os.Rename(serv+"/pkg/apis/"+path, serv+"/pkg/"+path)
-		check(err, "erro ao mover pastas: %v", err)
-		Run("gomove %v/pkg/apis/%v %v/pkg/%v", serv, path, serv, path)
-	}
-}
-
-func aplicaPatchDoGraphqlGo() {
-	if graphqlGoPermiteUsarCamposNoResolver() {
-		return
-	}
-	Run("go get -u github.com/graph-gophers/graphql-go")
-	if graphqlGoPermiteUsarCamposNoResolver() {
-		return
-	}
-	gopath := build.Default.GOPATH
-	patch := "src/github.com/rodrigobotelho/buildtransports/patches/" +
-		"0001-Use-struct-fields-as-resolvers-instead-of-methods-28.patch"
-	dir, err := os.Getwd()
-	check(err, "erro ao obter o diretório atual: %v", err)
-	os.Chdir(gopath + "/" + graphqlGoPath)
-	Run("git apply " + gopath + "/" + patch)
-	os.Chdir(dir)
-	Sed(
-		gopath+"/src/github.com/rodrigobotelho/graphql-kit/service.go",
-		"return graphql.MustParseSchema.*",
-		patchGraphqlKit,
-	)
-}
-
-func graphqlGoPermiteUsarCamposNoResolver() bool {
-	b, err := ioutil.ReadFile(
-		build.Default.GOPATH + "/" + graphqlGoPath + "/graphql.go",
-	)
-	check(err, "erro ao ler arquivo: %v", err)
-	return strings.Contains(string(b), "UseFieldResolvers")
-}
-
 // Run runs an arbitrary command
 func Run(format string, a ...interface{}) string {
-	cmd := fmt.Sprintf(format, a...)
-	args := strings.Fields(cmd)
-	b, err := exec.Command(args[0], args[1:]...).CombinedOutput()
+	return RunWithEnv(nil, format, a...)
+}
+
+// RunWithEnv runs an arbitrary command, given an environment
+func RunWithEnv(env []string, format string, a ...interface{}) string {
+	cmdline := fmt.Sprintf(format, a...)
+	args := strings.Fields(cmdline)
+	cmd := exec.Command(args[0], args[1:]...)
+	cmd.Env = append(os.Environ(), env...)
+	b, err := cmd.CombinedOutput()
 	out := strings.TrimSpace(string(b))
-	check(err, "erro ao executar '%v': %v", cmd, out)
+	check(err, "erro ao executar '%v': %v", cmdline, out)
 	return string(b)
+}
+
+// RunKit runs kit cli
+func RunKit(customName, format string, a ...interface{}) string {
+	env := []string{
+		"GK_SERVICE_PATH_FORMAT=%%.s%s/pkg/apis/service",
+		"GK_CMD_SERVICE_PATH_FORMAT=%%.s%s/cmd/service",
+		"GK_ENDPOINT_PATH_FORMAT=%%.s%s/pkg/apis/endpoint",
+		"GK_GRPC_PATH_FORMAT=%%.s%s/pkg/apis/grpc",
+		"GK_GRPC_PB_PATH_FORMAT=%%.s%s/pkg/apis/grpc/pb",
+		"GK_GRPC_CLIENT_PATH_FORMAT=%%.s%s/client/grpc",
+	}
+	for i := range env {
+		env[i] = fmt.Sprintf(env[i], a[0])
+	}
+	var customNameEnv []string
+	if customName != "" {
+		cnCamelCase := strings.ToUpper(customName[:1]) + customName[1:]
+		customNameEnv = []string{
+			fmt.Sprintf("GK_GRPC_PB_FILE_NAME=%%.s%s.proto", customName),
+			fmt.Sprintf("GK_SERVICE_INTERFACE_NAME=%%.s%sService", cnCamelCase),
+			fmt.Sprintf("GK_PROTO_SERVICE_NAME=%%.s%s", customName),
+			fmt.Sprintf("GK_PROTO_PACKAGE_NAME=%%.s%s", customName),
+		}
+	}
+	return RunWithEnv(append(env, customNameEnv...), format, a...)
 }
 
 func appendTo(file, text string) {
