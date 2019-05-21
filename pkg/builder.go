@@ -28,7 +28,7 @@ const pathPrefixSrc = `
 const PathPrefix=""`
 const graphqlAddr = `
 var graphqlAddr = fs.String("graphql-addr", ":8084", "graphql listen address")`
-const graphqlGoPath = "src/github.com/graph-gophers/graphql-go"
+const goKitCliPath = "src/github.com/kujtimiihoxha/kit"
 const schemaGraphqlDockerfile = "COPY --from=stage1 /app/pkg/apis/graphql/schema.graphql /pkg/apis/graphql/schema.graphql"
 
 // Build builds the transports
@@ -40,7 +40,7 @@ func Build(serv string, customName string) {
 	templates := build.Default.GOPATH +
 		"/src/github.com/rodrigobotelho/buildtransports/templates"
 	if !servicoJaExiste(serv) {
-		Run("kit n s " + serv)
+		fmt.Println(RunKit(customName, "kit n s %s", serv))
 		appendTo(serv+"/pkg/apis/service/service.go", pathPrefixSrc)
 		fmt.Println("Adicione os métodos que serão utilizados no serviço: " +
 			"pkg/service/service.go")
@@ -200,6 +200,25 @@ func installRequiredTools() {
 			Run("go get " + tool)
 		}
 	}
+	// verifica se PR-39 do GoKit CLI foi aceito,
+	// em caso negativo, aplica alterações
+	if !goKitCliPermiteCustomizarNomeDaInterfaceDoServico() {
+		dir, err := os.Getwd()
+		check(err, "erro ao obter o diretório atual: %v", err)
+		os.Chdir(build.Default.GOPATH + "/" + goKitCliPath)
+		Run("git pull origin master")       // atualiza versão
+		Run("git pull origin pull/39/head") // aplica PR-39
+		Run("go install")                   // instala nova versão
+		os.Chdir(dir)
+	}
+}
+
+func goKitCliPermiteCustomizarNomeDaInterfaceDoServico() bool {
+	b, err := ioutil.ReadFile(
+		build.Default.GOPATH + "/" + goKitCliPath + "/main.go",
+	)
+	check(err, "erro ao ler arquivo: %v", err)
+	return strings.Contains(string(b), "gk_service_interface_name")
 }
 
 func criaEstruturaDePastasBasicasSeNecessario(serv string, customName string) {
@@ -219,12 +238,8 @@ func criaEstruturaDePastasBasicasSeNecessario(serv string, customName string) {
 }
 
 func servicoJaExiste(serv string) bool {
-	for _, p := range []string{"/pkg/apis/service", "/pkg/apis/service"} {
-		if _, err := os.Stat(serv + p + "/service.go"); !os.IsNotExist(err) {
-			return true
-		}
-	}
-	return false
+	_, err := os.Stat(serv + "/pkg/apis/service/service.go")
+	return !os.IsNotExist(err)
 }
 
 // Run runs an arbitrary command
