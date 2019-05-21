@@ -36,8 +36,10 @@ func Build(serv string, customName string) {
 	installRequiredTools()
 	service := serv + "/cmd/service/service.go"
 	servName := strings.Title(serv)
+	servNameLower := serv
 	if customName != "" {
 		servName = strings.Title(customName)
+		servNameLower = customName
 	}
 	httpHandler := serv + "/pkg/apis/http/handler.go"
 	templates := build.Default.GOPATH +
@@ -46,7 +48,7 @@ func Build(serv string, customName string) {
 		fmt.Println(RunKit(customName, "kit n s %s", serv))
 		appendTo(serv+"/pkg/apis/service/service.go", pathPrefixSrc)
 		fmt.Println("Adicione os métodos que serão utilizados no serviço: " +
-			"pkg/service/service.go")
+			"pkg/apis/service/service.go")
 		os.Exit(0)
 	}
 	defer func() {
@@ -90,7 +92,7 @@ func Build(serv string, customName string) {
 				name := file[strings.LastIndex(file, "/"):]
 				cp(templates+"/graphql/"+name, file)
 				Sed(file, "Example", servName)
-				Sed(file, "example", serv)
+				Sed(file, "example", servNameLower)
 				Run("goimports -w " + file)
 			}
 			b1, err := ioutil.ReadFile(templates + "/graphql/init_handler.go")
@@ -103,7 +105,7 @@ func Build(serv string, customName string) {
 			}
 			appendTo(service, initHandler)
 			Sed(service, "Example", servName)
-			Sed(service, "example", serv)
+			Sed(service, "example", servNameLower)
 			Sed(service, "var grpcAddr.*", "&"+graphqlAddr)
 			Sed(
 				service,
