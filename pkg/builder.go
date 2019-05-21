@@ -36,6 +36,9 @@ func Build(serv string, customName string) {
 	installRequiredTools()
 	service := serv + "/cmd/service/service.go"
 	servName := strings.Title(serv)
+	if customName != "" {
+		servName = strings.Title(customName)
+	}
 	httpHandler := serv + "/pkg/apis/http/handler.go"
 	templates := build.Default.GOPATH +
 		"/src/github.com/rodrigobotelho/buildtransports/templates"
