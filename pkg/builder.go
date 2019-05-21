@@ -40,7 +40,7 @@ func Build(serv string, customName string) {
 	templates := build.Default.GOPATH +
 		"/src/github.com/rodrigobotelho/buildtransports/templates"
 	if !servicoJaExiste(serv) {
-		Run("kit n s " + serv)
+		fmt.Println(RunKit(customName, "kit n s "+serv, serv))
 		appendTo(serv+"/pkg/apis/service/service.go", pathPrefixSrc)
 		fmt.Println("Adicione os métodos que serão utilizados no serviço: " +
 			"pkg/service/service.go")
