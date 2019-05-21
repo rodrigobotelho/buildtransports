@@ -46,7 +46,7 @@ func Build(serv string, customName string) {
 		fmt.Println(RunKit(customName, "kit n s %s", serv))
 		appendTo(serv+"/pkg/apis/service/service.go", pathPrefixSrc)
 		fmt.Println("Adicione os métodos que serão utilizados no serviço: " +
-			"pkg/service/service.go")
+			"pkg/apis/service/service.go")
 		os.Exit(0)
 	}
 	defer func() {
