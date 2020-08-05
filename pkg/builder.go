@@ -31,6 +31,11 @@ var graphqlAddr = fs.String("graphql-addr", ":8084", "graphql listen address")`
 const goKitCliPath = "src/github.com/kujtimiihoxha/kit"
 const schemaGraphqlDockerfile = "COPY --from=stage1 /app/pkg/apis/graphql/schema.graphql /pkg/apis/graphql/schema.graphql"
 
+func getGOPATH() string {
+	// adicionado tratamento para windows (;) e linux/macos (:)
+	return strings.Split(strings.Split(build.Default.GOPATH, ":")[0], ";")[0]
+}
+
 // Build builds the transports
 func Build(serv string, customName string) {
 	installRequiredTools()
@@ -42,7 +47,7 @@ func Build(serv string, customName string) {
 		servNameLower = customName
 	}
 	httpHandler := serv + "/pkg/apis/http/handler.go"
-	templates := build.Default.GOPATH +
+	templates := getGOPATH() +
 		"/src/github.com/rodrigobotelho/buildtransports/templates"
 	if !servicoJaExiste(serv) {
 		fmt.Println(RunKit(customName, "kit n s %s", serv))
@@ -210,7 +215,7 @@ func installRequiredTools() {
 	if !goKitCliPermiteCustomizarNomeDaInterfaceDoServico() {
 		dir, err := os.Getwd()
 		check(err, "erro ao obter o diretório atual: %v", err)
-		os.Chdir(build.Default.GOPATH + "/" + goKitCliPath)
+		os.Chdir(getGOPATH() + "/" + goKitCliPath)
 		Run("git pull origin master")       // atualiza versão
 		Run("git pull origin pull/39/head") // aplica PR-39
 		Run("go install")                   // instala nova versão
@@ -220,7 +225,7 @@ func installRequiredTools() {
 
 func goKitCliPermiteCustomizarNomeDaInterfaceDoServico() bool {
 	b, err := ioutil.ReadFile(
-		build.Default.GOPATH + "/" + goKitCliPath + "/main.go",
+		getGOPATH() + "/" + goKitCliPath + "/main.go",
 	)
 	check(err, "erro ao ler arquivo: %v", err)
 	return strings.Contains(string(b), "gk_service_interface_name")
