@@ -32,7 +32,8 @@ const goKitCliPath = "src/github.com/kujtimiihoxha/kit"
 const schemaGraphqlDockerfile = "COPY --from=stage1 /app/pkg/apis/graphql/schema.graphql /pkg/apis/graphql/schema.graphql"
 
 func getGOPATH() string {
-	return strings.Split(build.Default.GOPATH, ":")[0]
+	// adicionado tratamento para windows (;) e linux/macos (:)
+	return strings.Split(strings.Split(build.Default.GOPATH, ":")[0], ";")[0]
 }
 
 // Build builds the transports
